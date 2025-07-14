@@ -3,7 +3,20 @@ import ReactDOM from "react-dom/client";
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
 import { configureStore } from "@reduxjs/toolkit";
-import { Provider, useDispatch } from "react-redux";
+import { Provider, useDispatch, useSelector } from "react-redux";
+
+const generations = [
+  { name: "All", limit: 10000, offset: 0 },
+  { name: "Generation 1", limit: 151, offset: 0 },
+  { name: "Generation 2", limit: 100, offset: 151 },
+  { name: "Generation 3", limit: 135, offset: 251 },
+  { name: "Generation 4", limit: 107, offset: 386 },
+  { name: "Generation 5", limit: 156, offset: 493 },
+  { name: "Generation 6", limit: 72, offset: 649 },
+  { name: "Generation 7", limit: 88, offset: 721 },
+  { name: "Generation 8", limit: 96, offset: 809 },
+  { name: "Generation 9", limit: 120, offset: 905 },
+];
 
 interface PokemonListing {
   count: number;
@@ -35,18 +48,17 @@ const api = createApi({
     baseUrl: "https://pokeapi.co/api/v2/",
   }),
   endpoints: (build) => ({
-    pokemonList: build.query<PokemonListing, void>({
-      query() {
+    pokemonList: build.query<PokemonListing, { limit: number; offset: number }>(
+      {
+        query({ limit, offset }) {
         return {
-          // these are specific to `fetchBaseQuery`
           url: "pokemon",
-          params: { limit: 151 },
-          // all the different arguments that you could also pass into the `fetch` "init" option
-          // see https://developer.mozilla.org/en-US/docs/Web/API/fetch#parameters
-          method: "GET", // GET is the default, this could be skipped
+          params: { limit, offset },
+          method: "GET",
         };
       },
-    }),
+      }
+    ),
     pokemonDetail: build.query<PokemonDetailData, { name: string }>({
       query: ({ name }) => `pokemon/${name}/`,
     }),
@@ -76,11 +88,21 @@ function App() {
   const [selectedPokemon, selectPokemon] = React.useState<string | undefined>(
     undefined
   );
+  const [generationIndex, setGenerationIndex] = React.useState(0);
+  const { limit, offset } = generations[generationIndex];
+
+  React.useEffect(() => {
+    selectPokemon(undefined);
+  }, [generationIndex]);
 
   return (
     <>
-      <header>
+      <header style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
         <h1>My Pokedex</h1>
+        <GenerationSelector
+          selectedGeneration={generationIndex}
+          onGenerationSelected={setGenerationIndex}
+        />
       </header>
       <main>
         {selectedPokemon ? (
@@ -90,8 +112,12 @@ function App() {
           </>
         ) : (
           <div style={{ display: "flex", gap: "2rem" }}>
-            <PokemonList onPokemonSelected={selectPokemon} />
-            <PokemonCacheStatusContainer />
+            <PokemonList
+              onPokemonSelected={selectPokemon}
+              limit={limit}
+              offset={offset}
+            />
+            <PokemonCacheStatusContainer limit={limit} offset={offset} />
             <CacheActions />
           </div>
         )}
@@ -100,13 +126,40 @@ function App() {
   );
 }
 
+function GenerationSelector({
+  selectedGeneration,
+  onGenerationSelected,
+}: {
+  selectedGeneration: number;
+  onGenerationSelected: (generationIndex: number) => void;
+}) {
+  return (
+    <select
+      value={selectedGeneration}
+      onChange={(e) => onGenerationSelected(parseInt(e.target.value, 10))}
+    >
+      {generations.map((gen, index) => (
+        <option key={gen.name} value={index}>
+          {gen.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function PokemonList({
   onPokemonSelected,
+  limit,
+  offset,
 }: {
   onPokemonSelected: (pokemonName: string) => void;
+  limit: number;
+  offset: number;
 }) {
-  const { isUninitialized, isLoading, isError, data } =
-    usePokemonListQuery();
+  const { isUninitialized, isLoading, isError, data } = usePokemonListQuery({
+    limit,
+    offset,
+  });
 
   if (isLoading || isUninitialized) {
     return <p>loading, please wait</p>;
@@ -119,7 +172,7 @@ function PokemonList({
   return (
     <article>
       <h2>Overview</h2>
-      <ol start={1}>
+      <ol start={offset + 1}>
         {data.results.map((pokemon) => (
           <li key={pokemon.name}>
             <button onClick={() => onPokemonSelected(pokemon.name)}>
@@ -158,14 +211,26 @@ function PokemonCacheStatus({ pokemonNames }: { pokemonNames: string[] }) {
   );
 }
 
-function PokemonCacheStatusContainer() {
-  const { data } = usePokemonListQuery();
+function PokemonCacheStatusContainer({
+  limit,
+  offset,
+}: {
+  limit: number;
+  offset: number;
+}) {
+  const { data } = usePokemonListQuery({ limit, offset });
   const pokemonNames = data?.results.map((p) => p.name) ?? [];
   return <PokemonCacheStatus pokemonNames={pokemonNames} />;
 }
 
 function CacheActions() {
   const dispatch = useDispatch();
+  const queries = useSelector((state: any) => state[api.reducerPath].queries);
+  const cachedItems = Object.values(queries).filter(
+    (query: any) =>
+      query?.endpointName === "pokemonDetail" && query?.status === "fulfilled"
+  ).length;
+
   const handleClearCache = () => {
     dispatch(api.util.resetApiState());
   };
@@ -173,6 +238,7 @@ function CacheActions() {
   return (
     <article>
       <h2>Actions</h2>
+      <p>Cached items: {cachedItems}</p>
       <button onClick={handleClearCache}>Clear Cache</button>
     </article>
   );
