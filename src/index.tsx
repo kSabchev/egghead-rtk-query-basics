@@ -160,6 +160,7 @@ function PokemonList({
     limit,
     offset,
   });
+  const prefetchPokemon = api.usePrefetch("pokemonDetail");
 
   if (isLoading || isUninitialized) {
     return <p>loading, please wait</p>;
@@ -175,7 +176,10 @@ function PokemonList({
       <ol start={offset + 1}>
         {data.results.map((pokemon) => (
           <li key={pokemon.name}>
-            <button onClick={() => onPokemonSelected(pokemon.name)}>
+            <button
+              onClick={() => onPokemonSelected(pokemon.name)}
+              onMouseEnter={() => prefetchPokemon({ name: pokemon.name })}
+            >
               {pokemon.name}
             </button>
           </li>
