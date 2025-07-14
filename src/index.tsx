@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
 import { configureStore } from "@reduxjs/toolkit";
-import { Provider } from "react-redux";
+import { Provider, useDispatch } from "react-redux";
 
 interface PokemonListing {
   count: number;
@@ -40,7 +40,7 @@ const api = createApi({
         return {
           // these are specific to `fetchBaseQuery`
           url: "pokemon",
-          params: { limit: 9 },
+          params: { limit: 151 },
           // all the different arguments that you could also pass into the `fetch` "init" option
           // see https://developer.mozilla.org/en-US/docs/Web/API/fetch#parameters
           method: "GET", // GET is the default, this could be skipped
@@ -89,7 +89,11 @@ function App() {
             <button onClick={() => selectPokemon(undefined)}>back</button>
           </>
         ) : (
-          <PokemonList onPokemonSelected={selectPokemon} />
+          <div style={{ display: "flex", gap: "2rem" }}>
+            <PokemonList onPokemonSelected={selectPokemon} />
+            <PokemonCacheStatusContainer />
+            <CacheActions />
+          </div>
         )}
       </main>
     </>
@@ -101,7 +105,7 @@ function PokemonList({
 }: {
   onPokemonSelected: (pokemonName: string) => void;
 }) {
-  const { isUninitialized, isLoading, isError, isSuccess, data } =
+  const { isUninitialized, isLoading, isError, data } =
     usePokemonListQuery();
 
   if (isLoading || isUninitialized) {
@@ -128,12 +132,58 @@ function PokemonList({
   );
 }
 
+function PokemonCacheStatusItem({ pokemonName }: { pokemonName: string }) {
+  const { isSuccess } = api.endpoints.pokemonDetail.useQueryState({
+    name: pokemonName,
+  });
+  return (
+    <>
+      {pokemonName}: {isSuccess ? "✅" : "❌"}
+    </>
+  );
+}
+
+function PokemonCacheStatus({ pokemonNames }: { pokemonNames: string[] }) {
+  return (
+    <article>
+      <h2>Cache Status</h2>
+      <ul>
+        {pokemonNames.map((name) => (
+          <li key={name}>
+            <PokemonCacheStatusItem pokemonName={name} />
+          </li>
+        ))}
+      </ul>
+    </article>
+  );
+}
+
+function PokemonCacheStatusContainer() {
+  const { data } = usePokemonListQuery();
+  const pokemonNames = data?.results.map((p) => p.name) ?? [];
+  return <PokemonCacheStatus pokemonNames={pokemonNames} />;
+}
+
+function CacheActions() {
+  const dispatch = useDispatch();
+  const handleClearCache = () => {
+    dispatch(api.util.resetApiState());
+  };
+
+  return (
+    <article>
+      <h2>Actions</h2>
+      <button onClick={handleClearCache}>Clear Cache</button>
+    </article>
+  );
+}
+
 const listFormatter = new Intl.ListFormat("en-GB", {
   style: "short",
   type: "conjunction",
 });
 function PokemonDetails({ pokemonName }: { pokemonName: string }) {
-  const { isUninitialized, isLoading, isError, isSuccess, data } =
+  const { isUninitialized, isLoading, isError,  data } =
     usePokemonDetailQuery({
       name: pokemonName,
     });
